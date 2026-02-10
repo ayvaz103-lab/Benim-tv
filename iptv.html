@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart App Pro</title>
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+    <style>
+        :root { --red: #e50914; --blue: #007bff; --green: #28a745; --dark: #0a0a0a; }
+        body { margin: 0; background: var(--dark); color: white; font-family: 'Segoe UI', sans-serif; }
+        .page { display: none; padding: 15px; animation: fade 0.3s; }
+        .active { display: block; }
+        @keyframes fade { from {opacity:0} to {opacity:1} }
+
+        /* Dashboard */
+        .header { text-align: center; padding: 20px; color: var(--red); }
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
+        .box { height: 120px; background: #1a1a1a; border-radius: 15px; display: flex; flex-direction: column; align-items: center; justify-content: center; border: 1px solid #333; cursor: pointer; }
+        .box-large { grid-column: span 2; background: linear-gradient(45deg, #440a0a, #e50914); height: 150px; font-size: 22px; font-weight: bold; }
+
+        /* Listeler */
+        .list-item { padding: 15px; background: #151515; margin-bottom: 8px; border-radius: 8px; border-left: 4px solid var(--red); }
+        input { width: 100%; padding: 12px; margin: 10px 0; border-radius: 8px; border: none; background: #222; color: white; box-sizing: border-box; }
+        
+        /* Video */
+        .video-container { width: 100%; aspect-ratio: 16/9; background: #000; position: sticky; top: 0; }
+        video { width: 100%; height: 100%; }
+        .back-btn { background: #333; padding: 8px 15px; border-radius: 20px; display: inline-block; margin-bottom: 10px; cursor: pointer; }
+    </style>
+</head>
+<body>
+
+<div id="home" class="page active">
+    <div class="header"><h1>SMART APP</h1><p>Giriş: 10 Şubat 2026</p></div>
+    <div class="grid">
+        <div class="box box-large" onclick="showPage('list'); loadType('Canlı')">📺 CANLI YAYIN</div>
+        <div class="box" onclick="showPage('list'); loadType('Film')">🎬 FİLMLER</div>
+        <div class="box" onclick="showPage('list'); loadType('Dizi')">🎭 DİZİLER</div>
+        <div class="box" onclick="showPage('settings')">⚙️ AYARLAR</div>
+        <div class="box" onclick="location.reload()">🔄 YENİLE</div>
+    </div>
+</div>
+
+<div id="list" class="page">
+    <div class="back-btn" onclick="showPage('home')">⬅ Geri</div>
+    <h2 id="title">Kanallar</h2>
+    <input type="text" placeholder="Ara..." onkeyup="filter(this.value)">
+    <div id="content">Yükleniyor...</div>
+</div>
+
+<div id="player" class="page">
+    <div class="video-container"><video id="vid" controls autoplay></video></div>
+    <div class="back-btn" onclick="showPage('list')" style="margin-top:20px">⬅ Listeye Dön</div>
+    <h3 id="playing">Kanal Adı</h3>
+</div>
+
+<div id="settings" class="page">
+    <div class="back-btn" onclick="showPage('home')">⬅ Geri</div>
+    <h2>Ayarlar</h2>
+    <p>IPTV M3U Linkiniz:</p>
+    <input type="text" id="m3uInput" value="http://12345.nobannedle.one:80/get.php?username=haticeferhat709781552&password=hpmk32549j&type=m3u_plus&output=ts">
+    <button onclick="saveSettings()" style="width:100%; padding:15px; background:var(--red); color:white; border:none; border-radius:8px;">KAYDET VE YÜKLE</button>
+</div>
+
+<script>
+    let currentData = [];
+    let m3uUrl = document.getElementById('m3uInput').value;
+
+    function showPage(id) {
+        document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+        document.getElementById(id).classList.add('active');
+        if(id === 'home') document.getElementById('vid').pause();
+    }
+
+    async function fetchData() {
+        try {
+            const proxy = "https://api.allorigins.win/raw?url=";
+            const response = await fetch(proxy + encodeURIComponent(m3uUrl));
+            const text = await response.text();
+            parse(text);
+        } catch (e) {
+            document.getElementById('content').innerHTML = "Hata: Linke erişilemedi. Lütfen Ayarlar'dan linki kontrol edin.";
+        }
+    }
+
+    function parse(data) {
+        currentData = [];
+        const lines = data.split('\n');
+        for (let i = 0; i < lines.length; i++) {
+            if (lines[i].startsWith('#EXTINF:')) {
+                const name = lines[i].split(',')[1] || "Bilinmeyen";
+                const url = lines[i+1]?.trim();
+                let type = "Canlı";
+                if(lines[i].includes('movie') || url.includes('.mp4')) type = "Film";
+                if(lines[i].includes('series')) type = "Dizi";
+                if(url) currentData.push({ name, url, type });
+            }
+        }
+        document.getElementById('content').innerHTML = "Veriler hazır. Kategori seçin.";
+    }
+
+    function loadType(type) {
+        document.getElementById('title').innerText = type;
+        const container = document.getElementById('content');
+        container.innerHTML = '';
+        currentData.filter(x => x.type === type).forEach(item => {
+            const div = document.createElement('div');
+            div.className = 'list-item';
+            div.innerText = item.name;
+            div.onclick = () => play(item.url, item.name);
+            container.appendChild(div);
+        });
+    }
+
+    function play(url, name) {
+        showPage('player');
+        document.getElementById('playing').innerText = name;
+        const v = document.getElementById('vid');
+        if (Hls.isSupported()) {
+            const hls = new Hls();
+            hls.loadSource(url);
+            hls.attachMedia(v);
+        } else { v.src = url; }
+    }
+
+    function saveSettings() {
+        m3uUrl = document.getElementById('m3uInput').value;
+        fetchData();
+        showPage('home');
+        alert("Ayarlar kaydedildi, kanallar yükleniyor...");
+    }
+
+    function filter(val) {
+        const items = document.getElementsByClassName('list-item');
+        for (let i of items) {
+            i.style.display = i.innerText.toLowerCase().includes(val.toLowerCase()) ? 'block' : 'none';
+        }
+    }
+
+    fetchData();
+</script>
+</body>
+</html>
